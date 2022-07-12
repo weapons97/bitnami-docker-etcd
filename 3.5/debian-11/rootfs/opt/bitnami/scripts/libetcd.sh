@@ -534,42 +534,35 @@ recalculate_initial_cluster() {
 }
 
 ########################
-# check auth
 # Globals:
 #   ETCD_*
 # Arguments:
 #   None
 # Returns:
-#   None
+#   Boolean
 ########################
 check_auth() {
-  local return_value=3
+  local return_value=0;
   info "Check to see if auth is enabled or root user already exists"
   ! is_etcd_running && etcd_start_bg
-  TESTROOTUSER="$(etcdctl user get root 2>&1 || true)"
-  info $TESTROOTUSER
-  noauth=`echo $TESTROOTUSER|grep "user name not found"|wc -l`
-  isauth=`echo $TESTROOTUSER|grep "Error: etcdserver: permission denied"|wc -l`
-  isroot=`echo $TESTROOTUSER|grep "User: root"|wc -l`
-  if [ $isroot -eq 1 ];
-  then
-  info "etcd auth is already enabled, skipping setup"
-  return_value=1;
-  fi
-  if [ $isauth -eq 1 ];
-  then
-  info "etcd root user already exists, skipping setup"
-  return_value=2;
-  fi
-  if [ $noauth -eq 1 ];
-  then
-  info "etcd root user not found, continuing setup"
-  return_value=0;
-  fi
-  if [ $return_value -eq 3];
-  then
-  warn "Unknown output"
-  fi
+  test_root_user="$(etcdctl user get root 2>&1 || true)"
+  case $test_root_user in
+      *"user name not found"*)
+          info "ETCD root user not found, continuing setup";
+          return_value=0;;
+      *"Error: etcdserver: permission denied"*)
+          info "ETCD auth is already enabled, skipping setup";
+          return_value=1;;
+      *"User: root"*)
+          info "ETCD root user already exists, skipping setup";
+          return_value=1;;
+      *"user name is empty"*)
+          info "ETCD auth is already enabled, skipping setup";
+          return_value=1;;
+      *)
+          warn "Unknown output, skipping setup";
+          return_value=1;;
+  esac
   etcd_stop
   return $return_value
 }
